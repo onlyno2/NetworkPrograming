@@ -88,15 +88,8 @@ void freeUsersNode(UserNode *head) {
  * Insert a UserNode* into head of a UserNode* list
  */
 void insertUserNode(UserNode **head, UserNode *node) {
-    if((*head) == NULL)
-        *head = node;
-    else {
-        UserNode *curr = *head;
-        while(curr->next != NULL) {
-            curr = curr->next;
-        }
-        curr->next = node;
-    }
+    node->next = *head;
+    *head = node;
 }
 
 /** 

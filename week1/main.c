@@ -113,10 +113,13 @@ void menuRegister(void) {
     /*
         insert data to file
     */
-    FILE *f = fopen("account.txt", "a");
-    if(f == NULL)
-        printf("Cannot open file!!");
-    fprintf(f, "%s %s %d\n", username, password, 1);
+    FILE *f = fopen("account.txt", "w");
+    UserNode *curr = userList;
+    while(curr) {
+        fprintf(f, "%s %s %d\n", curr->username, curr->password, curr->status);
+        curr = curr->next;
+    }
+    curr = NULL;
     fclose(f);
 }
 
