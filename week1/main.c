@@ -95,7 +95,7 @@ void menuRegister(void) {
     scanf("%s%*c", username);
     // if username existed
     if(searchUserNode(userList, username)) {
-        printf("User already exist!!\n");
+        printf("Account existed\n");
         return;
     }
     printf("Input new password: ");
@@ -121,6 +121,7 @@ void menuRegister(void) {
     }
     curr = NULL;
     fclose(f);
+    printf("Successful registration\n");
 }
 
 void menuSignIn(void) {
@@ -137,7 +138,7 @@ void menuSignIn(void) {
 
     // if username existed
     if(currentUser == NULL) {
-        printf("User not found!!\n");
+        printf("Cannot find account.\n");
         return;
     }
     
@@ -147,12 +148,12 @@ void menuSignIn(void) {
         printf("Input password: ");
         scanf("%s%*c", password);
         if(strcmp(currentUser->password, password) != 0) {
-            printf("Password not match!!\n");
+            printf("Password in incorrect.\n");
             counter++;
         } else
             break;
         if(counter == 3) {
-            printf("Log in failed. Your account has been blocked\n\n");
+            printf("Your account is blocked\n\n");
             // update in list
             currentUser->status = 0;
             // update in file
@@ -169,9 +170,12 @@ void menuSignIn(void) {
     if(counter == 3) {
         currentUser = NULL;
         return;
-    } else {
-        printf("Log in successed.\n");
+    } else if(currentUser->status == 0) {
+        printf("Account is blocked\n");
+        currentUser = NULL;
+        return;
     }
+    printf("Hello %s", currentUser->username);
 }
 
 void menuSearch(void) {
@@ -182,10 +186,10 @@ void menuSearch(void) {
     scanf("%s%*c", username);
     UserNode* user = searchUserNode(userList, username);
     if(user == NULL) {
-        printf("This user does not exist.\n");
+        printf("Cannot find account.\n");
         return;
     } else {
-        printf("Username: %s - status: ", user->username);
+        printf("Account is ");
         if(user->status == 1)
             printf("active.\n");
         else
@@ -209,10 +213,10 @@ void menuSignOut(void) {
     // check input user with current user
     if(strcmp(currentUser->username, username) == 0) {
         currentUser = NULL;
-        printf("Log out successed.\n");
+        printf("Goodbye %s.\n", currentUser->username);
         return;
     } else {
-        printf("Wrong user. Please try again later.\n");
+        printf("Account is not sign in.\n");
         return;
     }
 }

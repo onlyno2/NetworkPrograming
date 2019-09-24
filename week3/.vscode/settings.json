@@ -1,0 +1,8 @@
+{
+    "files.associations": {
+        "*.tcc": "c",
+        "fstream": "c",
+        "client.h": "c",
+        "socket.h": "c"
+    }
+}
