@@ -1,5 +1,9 @@
 {
     "files.associations": {
+<<<<<<< HEAD
         "random": "c"
+=======
+        "netdb.h": "c"
+>>>>>>> 3d41c5069334180b30c0c0d0dea6b39eb457e1dc
     }
 }

@@ -46,7 +46,13 @@ int main(int argc, char const *argv[])
     {
         getchar();
         printf("Message to sent: ");
-        scanf("%s%*c", buffer);
+        gets(buffer);
+        if(buffer[0] == '\n' || buffer[0] == NULL) {
+            printf("Shutdown ...\n");
+            exit(0);
+        }
+        buffer[strlen(buffer)] = '\0';
+        printf("%s\n", buffer);
         if(sendto(sockfd, (const char *)buffer, strlen(buffer),
                MSG_CONFIRM, (const struct sockaddr *)&servaddr, sizeof(servaddr)) == -1) {
                    perror("Message sending error: ");
