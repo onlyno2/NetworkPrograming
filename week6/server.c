@@ -1,5 +1,6 @@
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/wait.h>
 #include <netdb.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -8,8 +9,13 @@
 #include <netinet/in.h>
 #include <string.h>
 #include <ctype.h>
+#include <signal.h>
 
-#define BUFFER_MAX_LEN 1024
+#include "account.h"
+
+AccountNode *accountList;
+
+#define BUFFER_MAX_LEN 1024 /* max number of bytes can get at once */
 
 /*
     @param port number from cli argument
@@ -44,20 +50,142 @@ void die(char *msg, int type)
     {
         printf("%s\n", msg);
     }
-    exit(1);
+    _exit(1);
+}
+
+/*
+	read data from account.txt
+*/
+void readData(void)
+{
+    FILE *file = fopen("account.txt", "r");
+    char username[MAX_ACCOUNT_LEN], password[MAX_PASSWORD_LEN];
+    int status;
+    if (file == NULL)
+        die("read data error", 0);
+
+    while (!feof(file))
+    {
+        bzero(username, sizeof(username));
+        bzero(password, sizeof(password));
+        fscanf(file, "%s %s %d", username, password, &status);
+        printf("%s - %s - %d\n", username, password, status);
+        insertAccountNode(&accountList, createAccountNode(username, password, status));
+    }
+    fclose(file);
+}
+
+/*
+    write data to account.txt
+*/
+void writeData(void)
+{
+    FILE *file = fopen("account.txt", "w");
+    if (file == NULL)
+        die("write data error", 0);
+
+    AccountNode *tmp = accountList;
+    while (tmp)
+    {
+        fprintf(file, "%s %s %d\n", tmp->username, tmp->password, tmp->status);
+        tmp = tmp->next;
+    }
+
+    fclose(file);
+}
+
+/*
+    @param socket file descriptor
+
+    handle request from client
+*/
+void handleRequest(int connfd)
+{
+    char buffer[BUFFER_MAX_LEN];
+    AccountNode *user;
+
+    int n;
+    bzero(buffer, BUFFER_MAX_LEN);
+    /* read username */
+    if ((n = read(connfd, buffer, BUFFER_MAX_LEN)) == -1)
+        die("read error", 1);
+    buffer[n] = '\0';
+
+    /* get user info from username */
+    user = searchAccountNode(accountList, buffer);
+
+    /* if user not exist */
+    if (user == NULL)
+    {
+        if (write(connfd, "User does not exist!!", strlen("User does not exist!!")) == -1)
+            die("write error", 1);
+        die("user not exist", 0);
+    }
+    /* if blocked user */
+    if (user->status == 0)
+    {
+        if (write(connfd, "User blocked!!", strlen("User blocked!!")) == -1)
+            die("write error", 1);
+        die("User blocked!!", 0);
+    }
+
+    /* valid user */
+    if (write(connfd, "Valid user", strlen("Valid user")) == -1)
+        die("write error", 1);
+
+    int counter = 0;
+    bzero(buffer, BUFFER_MAX_LEN);
+    do
+    {
+        bzero(buffer, BUFFER_MAX_LEN);
+        /* read password */
+        if ((n = read(connfd, buffer, BUFFER_MAX_LEN)) == -1)
+            die("read error", 1);
+        else
+            buffer[n] = '\0';
+        /* match password */
+        if (strcmp(buffer, user->password) == 0)
+        {
+            if (write(connfd, "Logged in", strlen("Logged in")) == -1)
+                die("write error", 1);
+            break;
+        }
+        /* password not match */
+        if (write(connfd, "Password not match", strlen("Password not match")) == -1)
+            die("write error", 1);
+        counter++;
+    } while (counter < 3);
+
+    /* password not match over 3 times */
+    if (counter == 3)
+    {
+        user->status = 0;
+        /* write data to account.txt and quit handle */
+        writeData();
+        _exit(0);
+    }
+
+    /* read disconnect message */
+    if (n = read(connfd, buffer, BUFFER_MAX_LEN) == -1)
+        die("read error", 1);
 }
 
 /* Driver function */
 int main(int argc, char const *argv[])
 {
-    int sockfd, newSockfd;
-    socklen_t len;
+    int sockfd, newSocket;
     int port;
-    struct sockaddr_in servaddr, cli;
+    int num_bytes;
+    struct sockaddr_in servaddr;
+    struct sockaddr_in cli;
+    socklen_t len = sizeof(cli);
     char buffer[BUFFER_MAX_LEN];
 
     /* child pid for fork */
     pid_t pid;
+
+    /* read data from account.txt */
+    readData();
 
     /* config server */
     if (argc < 2)
@@ -94,28 +222,28 @@ int main(int argc, char const *argv[])
         printf("Server listening..\n");
 
     while (1)
-    {
-        /* Accept the data packet from client and verification */
-        if((newSockfd = accept(sockfd, (struct sockaddr *)&cli, &len)) < 0)
-            die("server acccept failed...\n", 1);
-        else
-            printf("server acccepted the client %s:%d\n", inet_ntoa(cli.sin_addr), ntohs(cli.sin_port));
-
-        if ((pid = fork()) == 0) {
-            close(sockfd);
-            while(1) {
-                if(read(newSockfd, buffer, BUFFER_MAX_LEN) == -1)
-                    die("read error", 1);
-                printf("Client %s: %s", inet_ntoa(cli.sin_addr), buffer);
-                if(write(newSockfd, buffer, BUFFER_MAX_LEN) == -1)
-                    die("write error", 1);
-                bzero(buffer, BUFFER_MAX_LEN);
-            }
+    {   
+        /* accept client */
+        newSocket = accept(sockfd, (struct sockaddr *)&cli, &len);
+        if (newSocket < 0)
+        {
+            exit(1);
         }
-        
-    }
-    /* close the socket */
-    close(newSockfd);
+        printf("Connection accepted from %s:%d\n", inet_ntoa(cli.sin_addr), ntohs(cli.sin_port));
 
+        /* create new child pid */
+        if ((pid = fork()) == 0)
+        {
+            close(sockfd);
+            /* handle message from client */
+            handleRequest(newSocket);
+
+            /* disconnect after logged in */
+            printf("disconnected with %s:%d\n", inet_ntoa(cli.sin_addr), ntohs(cli.sin_port));
+            exit(0);
+        }
+    }
+
+    close(newSocket);
     return 0;
 }

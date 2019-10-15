@@ -9,8 +9,11 @@
 #include <string.h>
 #include <ctype.h>
 
+#include "account.h"
+
 #define BUFFER_MAX_LEN 1024
 
+void die(char *msg, int type);
 /*
     @param port in string
 
@@ -51,7 +54,8 @@ int main(int argc, char const *argv[])
 	int sockfd;
 	int port;
 	struct sockaddr_in servaddr;
-    char buffer[BUFFER_MAX_LEN];
+	char buffer[BUFFER_MAX_LEN];
+	int logged_in = 0;
 
 	/* config client */
 	if (argc < 3)
@@ -86,18 +90,103 @@ int main(int argc, char const *argv[])
 	else
 		printf("connected to the server..\n");
 
-    while(1) {
-        printf("Client: ");
-        scanf("%s%*c", buffer);
-        if(write(sockfd, buffer, strlen(buffer)) == -1)
-            die("write error", 1);
-        if(read(sockfd, buffer, BUFFER_MAX_LEN) < 0)
-            die("read error", 1);
+	int counter = 0;
+	int n;
 
-        printf("Server: %s\n", buffer);
-        bzero(buffer, BUFFER_MAX_LEN);
-    }
+loop:
+	do
+	{
+		printf("\n\n1. login\n2. logout\nEnter your choice: ");
+		scanf("%d%*c", &n);
+		switch (n)
+		{
+		case 1:
+			printf("logged_in: %d\n", logged_in);
+			if (!logged_in)
+			{
+				goto A;
+			}
+			else
+			{
+				printf("Logged in. cannot login\n");
+			}
+			break;
+		case 2:
+			printf("logged_in: %d\n", logged_in);
+			if (logged_in)
+			{
+				printf("logged out\n");
+				logged_in = 0;
+			}
+			else
+			{
+				printf("not log in\n");
+			}
+			break;
+		default:
+			printf("invalid choice\n");
+			exit(1);
+			break;
+		}
+	} while (1);
 
-    /* close the socket */
-	close(sockfd);
+A:
+	printf("Username: ");
+	scanf("%s%*c", buffer);
+	if (write(sockfd, buffer, BUFFER_MAX_LEN) == -1)
+		die("write error", 1);
+
+	if ((n = read(sockfd, buffer, BUFFER_MAX_LEN)) < 0)
+		printf("[-]Error in receiving data.\n");
+	else
+		buffer[n] = '\0';
+
+	/* handle server return message */
+	if (strcmp(buffer, "User does not exist!!") == 0 || strcmp(buffer, "User blocked!!") == 0)
+		die(buffer, 0);
+
+	if (strcmp(buffer, "Valid user") != 0)
+		die(buffer, 0);
+
+	do
+	{
+		bzero(buffer, BUFFER_MAX_LEN);
+		/* input password */
+		if (counter == 0)
+		{
+			printf("Password: ");
+			scanf("%s%*c", buffer);
+		}
+		else
+		{
+			printf("Password (wrong %d time(s)): ", counter);
+			scanf("%s%*c", buffer);
+		}
+		/* send username */
+		if (write(sockfd, buffer, BUFFER_MAX_LEN) == -1)
+			die("write error", 1);
+		/* receive password */
+		if ((n = read(sockfd, buffer, BUFFER_MAX_LEN)) < 0)
+			printf("[-]Error in receiving data.\n");
+		else
+			buffer[n] = '\0';
+
+		/* if match password */
+		if (strcmp(buffer, "Logged in") == 0)
+		{
+			printf("logged in\n");
+			break;
+		}
+
+		printf("%s\n", buffer);
+		counter++;
+	} while (counter < 3);
+
+	/* not match over 3 times */
+	if (counter == 3)
+		die("Password not match 3 times!! User has been blocked", 0);
+	bzero(buffer, BUFFER_MAX_LEN);
+
+	logged_in = 1;
+	goto loop;
 }

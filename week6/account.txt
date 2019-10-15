@@ -1,0 +1,6 @@
+hello world 0
+lam nguyen 1
+kien nguyen 0
+bach do 1
+tu nguyen 1
+tien ha 0
